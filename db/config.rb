@@ -12,12 +12,17 @@ class Upload < Sequel::Model
     # TODO: validate file uploaded
 
     unless @@valid_extensions.include? File.extname(filename)
-      errors.add :filename, 'can only have the following extensions: ' + @@valid_extensions.join(", ")
+      errors.add :file, 'can only have the following extensions: ' + @@valid_extensions.join(", ")
     end
   end
 
-  def self.createFromFile(filename, tempfile, requestIp)
-    newUpload = Upload.create(:filename => Upload.ensureUniqueFilename(filename), :ip => requestIp, :transcription => nil )
+  def self.createFromFile(filename, tempfile, requestIp, description = "")
+    newUpload = Upload.create(
+      :filename => filename, 
+      :ip => requestIp, 
+      :transcription => nil, 
+      :duration => Upload.getDuration(tempfile), 
+      :description => description)
     if newUpload.save
       File.open(newUpload.file_path, 'wb') do |f|
         f.write tempfile.read
@@ -26,8 +31,11 @@ class Upload < Sequel::Model
     return newUpload.valid?
   end
 
-  def self.ensureUniqueFilename(filename)
-    return Time.now.to_i.to_s + "--" + filename
+  def self.getDuration(file)
+    begin 
+      return Speech::AudioInspector.new(file.path).duration
+    rescue RuntimeError => e
+    end
   end
 
   def file_path
@@ -41,7 +49,19 @@ class Upload < Sequel::Model
   def transcribe
     audio = Speech::AudioToText.new(self.file_path, :verbose => true)
     #return audio.to_yaml
-    return audio.to_text.to_yaml
+    return audio.to_text(7)
+  end
+
+  def before_create
+    self.filename = Time.now.to_i.to_s + "--" + self.filename
+    super
+  end
+
+  def before_destroy
+    if File.exists? self.file_path
+      File.delete(self.file_path)
+    end
+    super
   end
 
 end

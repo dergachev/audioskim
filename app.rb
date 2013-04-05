@@ -10,12 +10,13 @@ configure do
 	set :port, 9093
 	set :bind, "0.0.0.0" # not default, contrary to docs
 	
+	set :public_dir, File.join(File.dirname(__FILE__), 'public')
 	set :files, File.join(File.dirname(__FILE__), 'public', 'files')
 	set :uploaded_files, Dir.entries(settings.files) - ['.', '..']
 end
 
 get '/' do
-  @uploads = Upload.all
+  @uploads = Upload.reverse_order(:id).all
   haml :upload
 end
 
@@ -25,28 +26,76 @@ get '/transcribe/:upload' do
     flash[:error] = "Invalid upload ID"
     redirect to '/'
   end
-  return upload.transcribe
-  flash[:notice] = "Transcribed upload " + upload.to_s
+  transcription = upload.transcribe
+  if transcription
+    upload.transcription = transcription
+    upload.save
+    flash[:notice] = "Transcribed updated for upload ID " + upload.id.to_s
+  else
+    flash[:error] = "Unable to get transcription for upload ID " + upload.id.to_s
+  end
   redirect to '/'
 end
 
 post '/upload' do
-  if params[:file] && Upload.createFromFile(params[:file][:filename], params[:file][:tempfile], request.ip) 
-    flash[:notice] = "Upload successful"
-  else
-    flash[:error] = 'You have to choose a file'
+  unless params[:file]
+    flash.now[:error] = "No file uploaded"
+    return haml :upload_form
   end
+  begin
+    Upload.createFromFile(params[:file][:filename], params[:file][:tempfile], request.ip) 
+    flash[:notice] = "Upload successful"
+    redirect to '/'
+  rescue Sequel::ValidationFailed => error
+    # see http://sequel.rubyforge.org/rdoc/classes/Sequel/ValidationFailed.html
+    flash.now[:error] = 'Validation error'
+    error.errors.full_messages.each { |msg| flash.now[:error] = msg }
+    return haml :upload_form
+  end
+end
 
-  redirect '/'
+get '/delete/:upload' do
+  upload = Upload[params[:upload].to_i] #params[:upload]]
+  upload.destroy
+  flash[:notice] = "Deleted upload id" + upload.id.to_s
+  redirect to '/'
+end
+  
+post '/process_email' do
+  filename = params['attachment-1'][:filename]
+  tempfile = params['attachment-1'][:tempfile]
+  ip = params[:From]
+  subject = params[:subject]
+  Upload.createFromFile(filename, tempfile, ip, subject)
+  return
 end
 
 helpers do
-  def transcription(upload)
-    if upload.transcription
-      return upload.transcription
-    else 
-      transcription_url = url('/transcribe/' + upload.id.to_s)
-      return "<a href='#{transcription_url}'>Transcibe</a>"
+  def upload_actions(upload)
+    actions = { 
+      'Transcribe' => url('/transcribe/' + upload.id.to_s),
+      'Delete' => url('/delete/' + upload.id.to_s),
+      # 'Edit' => url('/edit/' + upload.id.to_s)
+    }
+    ret = ""
+    actions.each do |name,url| 
+      ret += "<a href='#{url}'>#{name}</a><br />"
+    end
+    return ret
+  end
+end
+
+# ensures bootstrap-alert compatibility; from https://gist.github.com/mamantoha/3358074
+module Sinatra
+  module Flash
+    module Style
+      def styled_flash(key=:flash)
+        return "" if flash(key).empty?
+        id = (key == :flash ? "flash" : "flash_#{key}")
+        close = '<a class="close" data-dismiss="alert" href="#">×</a>'
+        messages = flash(key).collect {|message| "  <div class='alert alert-#{message[0]}'>#{close}\n #{message[1]}</div>\n"}
+        "<div id='#{id}'>\n" + messages.join + "</div>"
+      end
     end
   end
 end
@@ -60,6 +109,7 @@ __END__
     %link(rel="stylesheet" type="text/css" href="/css/styles.css")
     %script(src="//cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js" type="text/javascript")
     %script(src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.0.3/bootstrap.min.js" type="text/javascript")
+    %script(src="/js/script.js" type="text/javascript")
   %body
     %div= haml :navbar
     .container
@@ -81,13 +131,21 @@ __END__
           %li
             %a{:href => '/'}Home
           %li
-            %a{:href => '/about'}About
+            %a{:href => '#/about'}About
           %li
-            %a{:href => '/register'}Register
+            %a{:href => '#/register'}Register
           %li
-            %a{:href => '/contact'}Contact
+            %a{:href => '#/contact'}Contact
         %p.navbar-text.pull-right
-          %a{:href => '/login'} Login
+          %a{:href => '#/login'} Login
+
+@@ upload_form
+%form{:action=>"/upload",:method=>"post",:enctype=>"multipart/form-data"}
+  %fieldset
+    %legend Upload New File
+    %input{:type=>"file",:name=>"file"}
+    %span.help-block File to be transcribed, in WAV or MP3 or FLAC format.
+    %input.btn{:type=>"submit",:value=>"Upload"}
 
 @@ upload
 %h2 Uploaded Files
@@ -98,21 +156,27 @@ __END__
       %th File
       %th IP
       %th Created
+      %th Duration
+      %th Description
       %th Transcription
+      %th Actions
   %tbody
     - @uploads.each do |upload|
       %tr
         %td= upload.id
         %td
-          %a(href="#{upload.file_url}") 
-            = upload.file_url
+          %a(href="#{upload.file_url}")= upload.filename
         %td= upload.ip
-        %td= upload.created
-        %td= transcription(upload)
+        %td= upload.created && upload.created.strftime("%Y-%m-%d %H:%M")
+        %td= upload.duration
+        %td= upload.description
+        %td= upload.transcription
+        %td
+          .dropdown
+            %a.dropdown-toggle(href="#" data-toggle="dropdown") Actions
+            %ul.dropdown-menu
+              - upload_actions(upload).each do |name,url|
+                %a(href="#{url}")= name
+           
+= haml :upload_form
 
-%form{:action=>"/upload",:method=>"post",:enctype=>"multipart/form-data"}
-  %fieldset
-    %legend Upload New File
-    %input{:type=>"file",:name=>"file"}
-    %span.help-block File to be transcribed, in WAV or MP3 or FLAC format.
-    %input.btn{:type=>"submit",:value=>"Upload"}
