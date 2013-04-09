@@ -26,7 +26,7 @@ Vagrant::Config.run do |config|
       # 'rvm_passenger' => {
       #   'global_gemset' => 'ruby-1.8.7-p330',
       #   'app_gemset' => 'ruby-1.8.7-p330@audioskim',
-      }
+      # }
     }
 
     chef.add_recipe "passenger_rvm"
