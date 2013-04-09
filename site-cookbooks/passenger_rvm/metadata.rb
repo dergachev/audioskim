@@ -11,3 +11,5 @@ depends "nginx"
 depends "rvm"
 depends "runit"
 depends "bluepill"
+
+supports "ubuntu" # Only tested on precise. In particular, passenger_rvm::bluepill is likely insufficient on redhat
