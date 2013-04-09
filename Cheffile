@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+
+site 'http://community.opscode.com/api/v1'
+
+cookbook 'apt'
+cookbook 'nginx'
+cookbook 'bluepill' 
+cookbook 'runit' 
+cookbook 'rvm', :git => 'https://github.com/fnichol/chef-rvm'
+#cookbook 'root_ssh_agent', :git => 'https://github.com/dergachev/chef_root_ssh_agent.git'
