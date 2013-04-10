@@ -11,17 +11,11 @@ sudo gem install unicorn sinatra #dont know if we need this
 sudo apt-get install libcurl4-openssl-dev
 sudo gem install passenger
 
-passenger start # installs a bunch of stuff the first time, takes a while
 passenger start -p 9093 # apparently passenger ignores sinatra config
 mkdir -p public/files # for uploads
 
 # http://stackoverflow.com/questions/1247125/how-to-get-sinatra-to-auto-reload-the-file-after-each-change#8187001
 mkdir -p tmp/ && touch tmp/always_restart.txt 
-
-# install gems, run the migrations
-cd /vagrant/basic-sinatra
-bundle install
-sequel -m db/migrations sqlite://db/audioskim.db
 
 # debug running speech2text gem as standalone
 speech2text public/files/message.flac
@@ -30,6 +24,8 @@ speech2text public/files/message.flac
 
 
 ## Dev notes 
+
+### chef
 
 * vagrant-snap is broken: https://github.com/mitchellh/vagrant/issues/143
 ** workaround: https://gist.github.com/tombh/5142237#vagrant-snapshot.rb
@@ -40,6 +36,8 @@ speech2text public/files/message.flac
     - use include_attribute("cookbook::recipe") to pull in other cookbooks attributes (to read!)
     - use `node.set['cookbook']['attribute'] = ...` instead of `default['cookbook']['attribute'] = ...`
     - I'm not sure if `node.set` still allows overriding in Vagrantfile; ideally it would
+* "FATAL: TypeError: can't convert nil into String" was a spurrious error
+    - changing `rvm_shell "initialize_audioskim_site"` to `rvm_shell "initialize-audioskim-site"` seemed to fix it
 
 ### speech2text
 
@@ -126,10 +124,8 @@ localtunnel -k /vagrant/id_rsa.pub 9093
       (instead of compile time)
     - ```
       ruby_block "stop now" do
-        code do
+        block do
           raise "This is really okay, man"
-        end
-        action :nothing
         end
       end
       ```

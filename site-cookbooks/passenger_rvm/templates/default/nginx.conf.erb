@@ -1,8 +1,8 @@
 server {
-  listen   9093;
-  server_name  localhost;
+  listen   <%= node['passenger_rvm']['nginx_port'] %>;
+  server_name  <%= node['hostname'] %>;
   passenger_enabled on;
-  root /vagrant/www-root/public;
+  root <%= node['passenger_rvm']['nginx_public'] %>; 
 
   access_log  /var/log/nginx/localhost.access.log;
   client_max_body_size 20M; # fixes 2mb default limit

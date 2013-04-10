@@ -21,31 +21,8 @@
 
 include_recipe "apt::default"
 
-include_recipe "rvm::default" # required to avoid https://github.com/fnichol/chef-rvm/issues/141
-include_recipe "rvm::vagrant" 
-include_recipe "rvm::gem_package" # makes gem_package resource respect RVM
-
-include_recipe "passenger_rvm::bluepill"
-
-include_recipe "nginx" # loads the default recipe
-
-# guard against mysterious attribute overriding behavior (fail early)
-raise "TRYING TO INSTALL NGINX FROM PACKAGE" unless node['nginx']['install_method'] == 'source'
-
-# workaround to make nginx::passenger compatible with RVM
-# adapted from https://github.com/substantial/cookbook-nginx/blob/master/recipes/rvm_passenger.rb#L51
-# otherwise nginx compilation will trigger passenger compilation, without rvmsudo
-rvm_shell "compile_passenger_support_files" do
-  action :nothing
-  subscribes :run, resources('gem_package[passenger]'), :immediately
-  ruby_string node['passenger_rvm']['global_gemset']
-  user "root"
-  code <<-CODE
-    cd `passenger-config --root`
-    rake nginx RELEASE=yes
-  CODE
-  creates "#{node["nginx"]["passenger"]["root"]}/ext/common/libpassenger_common.a"
-end
+include_recipe "passenger_rvm::rvm"
+include_recipe "passenger_rvm::nginx"
 
 template "#{node.nginx.dir}/sites-available/passenger.conf" do
   source "nginx.conf.erb"
@@ -54,10 +31,26 @@ end
 
 nginx_site "passenger.conf"
 
+file '.ruby-version' do 
+  content node['passenger_rvm']['app_gemset']
+  path "#{node['passenger_rvm']['app_path']}/.ruby-version"
+end
+
 rvm_shell "run_bundle_install" do
-  cwd "/vagrant/www-root"
   code "bundle install"
+  cwd node['passenger_rvm']['app_path']
   ruby_string node['passenger_rvm']['app_gemset']
   notifies :restart, 'service[nginx]'
-  not_if 
+  not_if "bundle check", :cwd => "/vagrant/www-root"
 end
+
+rvm_shell "initialize-audioskim-site" do
+  code <<-EOT
+    mkdir -p public/files
+    sequel -m db/migrations sqlite://db/audioskim.db 
+  EOT
+  ruby_string node['passenger_rvm']['app_gemset']
+  cwd node['passenger_rvm']['app_path']
+end
+
+log("SUCCESS: site deployed at http://localhost:#{node['passenger_rvm']['nginx_port']}")
