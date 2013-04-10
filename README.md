@@ -34,6 +34,12 @@ speech2text public/files/message.flac
 * vagrant-snap is broken: https://github.com/mitchellh/vagrant/issues/143
 ** workaround: https://gist.github.com/tombh/5142237#vagrant-snapshot.rb
 * forward_port confusion, resolved by `set :bind, '0.0.0.0'`
+* use resource() to modify chef resources
+* overriding attributes of other cookbooks
+    - http://docs.opscode.com/essentials_cookbook_attribute_files.html
+    - use include_attribute("cookbook::recipe") to pull in other cookbooks attributes (to read!)
+    - use `node.set['cookbook']['attribute'] = ...` instead of `default['cookbook']['attribute'] = ...`
+    - I'm not sure if `node.set` still allows overriding in Vagrantfile; ideally it would
 
 ### speech2text
 
@@ -80,13 +86,10 @@ localtunnel -k /vagrant/id_rsa.pub 9093
   - http://railscasts.com/episodes/271-resque?view=asciicast
   - https://github.com/kylefritz/resque-sinatra-foreman-example
   - https://github.com/jeffkreeftmeijer/navvy/wiki/getting-started
-
-## Misc deployment notes
-
-* tail -f /var/log/nginx/error.log
 * FLAC files aren't working for some reason!! 
     - `ffmpeg -i FILENAME.flac FILENAME.flac.mp3`
 
+### rvm, nginx, passenger and sudo... fun!
 
 * from https://rvm.io/rvm/basics/
     - For non-interactive shells RVM will be added to PATH only, not loaded. This means using rubies is not possible in this mode, but there are simple methods to load ruby:
@@ -97,13 +100,44 @@ localtunnel -k /vagrant/id_rsa.pub 9093
     - http://stackoverflow.com/questions/12550603/how-do-i-run-a-chef-command-using-rvmsudo-installing-passenger-with-rvm
     - http://craiccomputing.blogspot.ca/2010/10/passenger-3-nginx-and-rvm-on-mac-os-x.html
     - http://blog.ninjahideout.com/posts/the-path-to-better-rvm-and-passenger-integrationG
-
 * https://gist.github.com/mrsweaters/1742642#vagrant-box-setup-ruby-1.9.3/nginx/passenger/mysql
 * http://stackoverflow.com/questions/15297564/how-to-debug-rvm-setup-from-chef-and-vagrant
 * https://github.com/fnichol/chef-rvm_passenger
-
 * https://gist.github.com/mrsweaters/1742642
 * http://blog.phusion.nl/2010/09/21/phusion-passenger-running-multiple-ruby-versions/
 * http://docs.opscode.com/resource_common_notifications.html
 * http://tickets.opscode.com/browse/CHEF-2308#comment-23011 (about editing other resources)
-* https://gist.github.com/fujin/1713157
+* https://gist.github.com/fujin/1713157#template-override-between-cookbooks
+* https://github.com/fnichol/chef-rvm
+* http://stackoverflow.com/questions/15708916/use-rvmrc-or-ruby-version-file-to-set-a-project-gemset-with-rvm
+* http://gembundler.com/v1.3/man/bundle-install.1.html
+* http://stackoverflow.com/questions/4036255/how-to-automatically-run-bundle-install-if-the-gemfile-is-updated-after-a-git-pu
+* https://github.com/opscode-cookbooks/application_ruby
+
+## vagrant-snap in between recipes
+
+* use "next" keyword to exit Vagrantfile config block early
+* use "return" keyword to exit a recipe file early (without chef failure)
+* use "runlist_modifiers" cookbook to easily remove recipes from runlist
+    - https://github.com/hw-cookbooks/runlist_modifiers
+    - http://code.chrisroberts.org/blog/2012/05/09/cooking-up-partial-run-lists-with-chef/
+* use "raise" to exit early (with chef failure)
+    - do this from a ruby_block resource to raise error at resource execution time 
+      (instead of compile time)
+    - ```
+      ruby_block "stop now" do
+        code do
+          raise "This is really okay, man"
+        end
+        action :nothing
+        end
+      end
+      ```
+    - http://lists.opscode.com/sympa/arc/chef/2012-04/msg00292.html
+* use multiple Vagrantfile chef_solo blocks to segment recipes 
+    - both blocks will have the same chef.cookbook_folders
+    - uniquely set "chef.provisioning_path" in each block to avoid conflict
+* consider writing a "vm.config.provisioner :snapshot"
+    - https://github.com/mitchellh/vagrant/blob/master/plugins/provisioners/shell/provisioner.rb
+    - method to specify via Vagrantfile where to take snapshots, relative to other provisioners
+    - only works if other provisioners exit with success (eg incompatible with raise)
