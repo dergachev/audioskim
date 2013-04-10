@@ -1,3 +1,4 @@
+# encoding: utf-8 
 require 'rubygems'
 require 'sinatra'
 require 'sinatra/flash'
@@ -72,16 +73,10 @@ end
 
 helpers do
   def upload_actions(upload)
-    actions = { 
+    return { 
       'Transcribe' => url('/transcribe/' + upload.id.to_s),
       'Delete' => url('/delete/' + upload.id.to_s),
-      # 'Edit' => url('/edit/' + upload.id.to_s)
     }
-    ret = ""
-    actions.each do |name,url| 
-      ret += "<a href='#{url}'>#{name}</a><br />"
-    end
-    return ret
   end
 end
 
