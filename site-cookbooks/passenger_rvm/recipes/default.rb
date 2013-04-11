@@ -22,6 +22,7 @@
 include_recipe "apt::default"
 
 include_recipe "passenger_rvm::rvm"
+include_recipe "passenger_rvm::bluepill"
 include_recipe "passenger_rvm::nginx"
 
 template "#{node.nginx.dir}/sites-available/passenger.conf" do

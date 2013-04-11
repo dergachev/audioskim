@@ -1,4 +1,3 @@
-include_recipe "passenger_rvm::bluepill"
 include_recipe "nginx" # loads the default recipe
 
 # guard against mysterious attribute overriding behavior (fail early)
